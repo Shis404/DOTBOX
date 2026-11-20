@@ -1,0 +1,2829 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dots &amp; Boxes 1v1 — Gradient Strategy Duel</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+
+  <!-- Tone.js for procedural sound effects (no external audio URLs) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+
+  <!-- PeerJS (WebRTC) for serverless 1v1 online multiplayer on static hosts like GitHub Pages -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'pop-in': 'popIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          },
+          keyframes: {
+            popIn: {
+              '0%': { opacity: '0', transform: 'scale(0.94) translateY(8px)' },
+              '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+            },
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      overscroll-behavior-y: contain;
+      background-color: #090d16;
+      color: #f8fafc;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+
+    button,
+    input {
+      touch-action: manipulation;
+    }
+
+    /* Ambient background mesh */
+    .bg-mesh {
+      background-color: #090d16;
+      background-image:
+        radial-gradient(at 15% 15%, rgba(6, 182, 212, 0.12) 0px, transparent 50%),
+        radial-gradient(at 85% 85%, rgba(244, 63, 94, 0.12) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(30, 41, 59, 0.4) 0px, transparent 80%);
+    }
+
+    /* Glass panel styling */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    /* Interactive Game Canvas */
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      cursor: pointer;
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.4);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.4);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(148, 163, 184, 0.6);
+    }
+  </style>
+</head>
+<body class="bg-mesh min-h-[100dvh] flex flex-col select-none">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="w-full border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md z-30 shrink-0">
+    <div class="max-w-5xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2">
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-rose-500/20 border border-slate-700/80 flex items-center justify-center shadow-inner">
+          <svg class="w-5 h-5 text-cyan-400" viewBox="0 0 24 24" fill="none">
+            <circle cx="5" cy="5" r="2.5" fill="#38bdf8" />
+            <circle cx="19" cy="5" r="2.5" fill="#fb7185" />
+            <circle cx="5" cy="19" r="2.5" fill="#fb7185" />
+            <circle cx="19" cy="19" r="2.5" fill="#38bdf8" />
+            <line x1="7.5" y1="5" x2="16.5" y2="5" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+            <line x1="19" y1="7.5" x2="19" y2="16.5" stroke="#fb7185" stroke-width="2" stroke-linecap="round" />
+            <line x1="7.5" y1="19" x2="16.5" y2="19" stroke="#38bdf8" stroke-width="2" stroke-linecap="round" />
+            <line x1="5" y1="7.5" x2="5" y2="16.5" stroke="#fb7185" stroke-width="2" stroke-linecap="round" />
+            <rect x="7.5" y="7.5" width="9" height="9" rx="1.5" fill="url(#logoGrad)" fill-opacity="0.45" />
+            <defs>
+              <linearGradient id="logoGrad" x1="7.5" y1="7.5" x2="16.5" y2="16.5" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#38bdf8" />
+                <stop offset="1" stop-color="#fb7185" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-white">DOTS &amp; BOXES</h1>
+            <span class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">1v1</span>
+          </div>
+          <p class="text-[11px] text-slate-400 hidden sm:block">Connect dots • Complete squares • Claim gradient territory</p>
+        </div>
+      </div>
+
+      <!-- Header Actions -->
+      <div class="flex items-center gap-2">
+        <!-- Sound Toggle -->
+        <button id="btnToggleSound" type="button" title="Toggle Sound Effects"
+          class="p-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 text-slate-300 hover:text-white transition active:scale-95">
+          <svg id="iconSoundOn" class="w-4 h-4 sm:w-5 sm:h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+          </svg>
+          <svg id="iconSoundOff" class="w-4 h-4 sm:w-5 sm:h-5 hidden text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+          </svg>
+        </button>
+
+        <!-- How to Play Button -->
+        <button id="btnRules" type="button"
+          class="px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/70 text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition active:scale-95">
+          Rules
+        </button>
+
+        <!-- Back to Lobby / Setup Button -->
+        <button id="btnOpenLobby" type="button"
+          class="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-xs sm:text-sm font-semibold text-white shadow-lg shadow-cyan-950/50 transition active:scale-95">
+          Mode &amp; Setup
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex flex-col justify-between gap-3 min-h-0">
+
+    <!-- Scoreboard & Box Counter HUD -->
+    <section class="grid grid-cols-12 gap-2 sm:gap-4 items-stretch shrink-0">
+      <!-- Player 1 Box Counter Card -->
+      <div id="cardP1" class="col-span-5 glass-panel rounded-2xl p-2.5 sm:p-3.5 transition-all duration-300 border-2 relative overflow-hidden">
+        <div id="glowP1" class="absolute inset-0 opacity-20 pointer-events-none transition-opacity duration-300"></div>
+        <div class="relative z-10 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span id="dotP1" class="w-2.5 h-2.5 rounded-full shrink-0"></span>
+              <span id="labelP1Name" class="text-xs sm:text-sm font-bold text-white truncate">Player 1</span>
+              <span id="badgeYouP1" class="hidden px-1.5 py-0.2 text-[9px] font-bold uppercase rounded bg-white/15 text-white">You</span>
+            </div>
+            <p id="turnTagP1" class="text-[11px] font-semibold mt-0.5 text-cyan-300">Your Turn</p>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Boxes</div>
+            <div id="scoreP1" class="text-2xl sm:text-3xl font-black font-mono leading-none text-white">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Match Info & Remaining Boxes Counter -->
+      <div class="col-span-2 glass-panel rounded-2xl p-2 flex flex-col items-center justify-center text-center">
+        <span class="text-[9px] sm:text-[10px] uppercase tracking-wider text-slate-400 font-bold">Left</span>
+        <span id="boxesRemaining" class="text-lg sm:text-2xl font-black font-mono text-slate-100 leading-tight">16</span>
+        <span id="gridBadge" class="text-[9px] sm:text-[10px] font-mono text-slate-400">5×5</span>
+      </div>
+
+      <!-- Player 2 Box Counter Card -->
+      <div id="cardP2" class="col-span-5 glass-panel rounded-2xl p-2.5 sm:p-3.5 transition-all duration-300 border-2 relative overflow-hidden">
+        <div id="glowP2" class="absolute inset-0 opacity-0 pointer-events-none transition-opacity duration-300"></div>
+        <div class="relative z-10 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span id="dotP2" class="w-2.5 h-2.5 rounded-full shrink-0"></span>
+              <span id="labelP2Name" class="text-xs sm:text-sm font-bold text-white truncate">Player 2</span>
+              <span id="badgeYouP2" class="hidden px-1.5 py-0.2 text-[9px] font-bold uppercase rounded bg-white/15 text-white">You</span>
+            </div>
+            <p id="turnTagP2" class="text-[11px] font-semibold mt-0.5 text-slate-400">Waiting</p>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Boxes</div>
+            <div id="scoreP2" class="text-2xl sm:text-3xl font-black font-mono leading-none text-white">0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Online Room Status Banner (Shown only when in an Online 1v1 Room) -->
+    <div id="onlineRoomBar" class="hidden glass-panel rounded-xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 border border-cyan-500/30">
+      <div class="flex items-center gap-2">
+        <span id="onlineStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        <span id="onlineStatusText" class="font-medium text-slate-200">Waiting for opponent to join...</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-slate-400">Room Code:</span>
+        <code id="activeRoomCodeDisplay" class="font-mono font-bold text-cyan-300 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-700">------</code>
+        <button id="btnCopyRoomCode" type="button"
+          class="px-2.5 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 font-semibold transition active:scale-95">
+          Copy
+        </button>
+      </div>
+    </div>
+
+    <!-- Interactive Dots & Boxes Board Container -->
+    <section id="boardContainer" class="w-full aspect-square max-h-[56dvh] min-h-[280px] sm:aspect-auto sm:max-h-none sm:flex-1 sm:min-h-[380px] glass-panel rounded-3xl p-2 sm:p-4 relative flex items-center justify-center overflow-hidden shadow-2xl">
+      <canvas id="gameCanvas"></canvas>
+
+      <!-- Waiting for Opponent Overlay (Online Room) -->
+      <div id="waitingOverlay" class="hidden absolute inset-0 bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20">
+        <div class="w-12 h-12 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center mb-3 animate-bounce">
+          <svg class="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+        </div>
+        <h3 class="text-lg sm:text-xl font-extrabold text-white mb-1">Waiting for Challenger (1v1)</h3>
+        <p class="text-xs sm:text-sm text-slate-300 max-w-sm mb-4">Share your Room Code or Invite Link with a friend so they can join this 1v1 match.</p>
+        <div class="flex flex-wrap items-center justify-center gap-2 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 mb-4">
+          <span id="overlayRoomCode" class="font-mono text-xl font-black tracking-widest text-cyan-300">------</span>
+          <button id="btnOverlayCopy" type="button" class="ml-1 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-xs font-bold text-white transition">
+            Copy Code
+          </button>
+          <button id="btnOverlayCopyLink" type="button" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-cyan-300 transition">
+            Copy Link
+          </button>
+        </div>
+        <button id="btnCancelOnlineRoom" type="button" class="text-xs text-slate-400 hover:text-rose-400 underline">
+          Leave Room &amp; Return to Setup
+        </button>
+      </div>
+
+      <!-- Victory / Game Over Overlay -->
+      <div id="gameOverOverlay" class="hidden absolute inset-0 bg-slate-950/82 backdrop-blur-md flex flex-col items-center justify-center p-5 text-center z-20 animate-pop-in">
+        <div id="winnerCrown" class="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400/25 to-yellow-500/10 border border-amber-400/40 flex items-center justify-center mb-3 shadow-lg">
+          <svg class="w-8 h-8 text-amber-400" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm14 3c0 .6-.4 1-1 1H6c-.6 0-1-.4-1-1v-1h14v1z" />
+          </svg>
+        </div>
+        <h2 id="winnerTitle" class="text-2xl sm:text-3xl font-black tracking-tight text-white mb-1">Player 1 Wins!</h2>
+        <p id="winnerSubtitle" class="text-xs sm:text-sm text-slate-300 mb-5">Dominated the grid with superior territory control.</p>
+
+        <!-- Final Box Count Summary -->
+        <div class="grid grid-cols-2 gap-3 w-full max-w-xs mb-6">
+          <div id="finalCardP1" class="rounded-2xl p-3 border border-slate-700/80 bg-slate-900/90">
+            <div id="finalNameP1" class="text-xs font-bold text-slate-300 truncate">Player 1</div>
+            <div id="finalScoreP1" class="text-2xl font-black font-mono text-white mt-0.5">0</div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-400">Boxes</div>
+          </div>
+          <div id="finalCardP2" class="rounded-2xl p-3 border border-slate-700/80 bg-slate-900/90">
+            <div id="finalNameP2" class="text-xs font-bold text-slate-300 truncate">Player 2</div>
+            <div id="finalScoreP2" class="text-2xl font-black font-mono text-white mt-0.5">0</div>
+            <div class="text-[10px] uppercase tracking-wider text-slate-400">Boxes</div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-3">
+          <button id="btnPlayAgain" type="button"
+            class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-sm font-bold text-white shadow-lg shadow-cyan-950/60 transition active:scale-95">
+            Play Again (Rematch)
+          </button>
+          <button id="btnChangeSettingsEnd" type="button"
+            class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sm font-semibold text-slate-200 transition active:scale-95">
+            Change Dots / Mode
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom Quick Controls Bar & Signature Footer -->
+    <footer class="w-full flex flex-col gap-1.5 shrink-0 pb-1">
+      <div class="w-full flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2 text-xs text-slate-400">
+          <span id="modeIndicatorBadge" class="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-800 font-medium text-slate-300">
+            Mode: Local 1v1
+          </span>
+          <span class="text-slate-600">•</span>
+          <span class="sm:hidden text-[11px] text-slate-400">Tap or slide between 2 dots</span>
+          <span class="hidden sm:inline">Complete a square to earn +1 box &amp; a bonus turn!</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btnResetBoard" type="button"
+            class="px-3.5 py-2 min-h-[38px] rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-xs font-semibold text-slate-300 hover:text-white transition active:scale-95">
+            Reset Match
+          </button>
+        </div>
+      </div>
+
+      <div class="w-full text-center pt-1 border-t border-slate-800/60">
+        <span class="text-[11px] font-extrabold tracking-[0.22em] uppercase bg-gradient-to-r from-cyan-400 via-slate-200 to-rose-400 bg-clip-text text-transparent">
+          MADE BY SNEHASHIS
+        </span>
+      </div>
+    </footer>
+  </main>
+
+  <!-- SETUP & MULTIPLAYER LOBBY MODAL -->
+  <div id="setupModal" class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-2.5 sm:p-5 overflow-y-auto">
+    <div class="glass-panel w-full max-w-xl max-h-[94dvh] overflow-y-auto rounded-3xl p-4 sm:p-7 border border-slate-700/80 shadow-2xl animate-pop-in my-auto">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h2 class="text-xl sm:text-2xl font-black text-white tracking-tight">1v1 Match Setup</h2>
+          <p class="text-xs sm:text-sm text-slate-400">Configure dot grid size, player colors, and game mode</p>
+        </div>
+        <button id="btnCloseSetup" type="button" title="Resume Current Game"
+          class="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- 1. Select Game Mode -->
+      <div class="mb-5">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">1. Select 1v1 Mode</label>
+        <div class="grid grid-cols-3 gap-2">
+          <button type="button" data-mode="local"
+            class="mode-btn p-2.5 sm:p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-cyan-500/15 border-cyan-400 text-white">
+            <span class="text-xs sm:text-sm font-bold">Local 1v1</span>
+            <span class="text-[10px] text-slate-300 mt-0.5">Pass &amp; Play</span>
+          </button>
+          <button type="button" data-mode="online"
+            class="mode-btn p-2.5 sm:p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <span class="text-xs sm:text-sm font-bold flex items-center gap-1.5">
+              Online 1v1
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            </span>
+            <span class="text-[10px] text-slate-400 mt-0.5">Room Code Duel</span>
+          </button>
+          <button type="button" data-mode="bot"
+            class="mode-btn p-2.5 sm:p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <span class="text-xs sm:text-sm font-bold">1v1 vs Bot</span>
+            <span class="text-[10px] text-slate-400 mt-0.5">Smart Tactical AI</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. Select Number of Dots (Grid Size) -->
+      <div class="mb-5">
+        <div class="flex items-center justify-between mb-2">
+          <label class="text-xs font-bold uppercase tracking-wider text-slate-400">2. Number of Dots (Grid Size)</label>
+          <span id="selectedGridDesc" class="text-xs font-mono text-cyan-300">5×5 Dots (16 Boxes)</span>
+        </div>
+
+        <!-- Quick Grid Presets -->
+        <div class="grid grid-cols-4 gap-2 mb-2.5">
+          <button type="button" data-rows="3" data-cols="3" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="text-xs sm:text-sm font-black font-mono">3×3</div>
+            <div class="text-[10px] text-slate-400">4 Boxes</div>
+          </button>
+          <button type="button" data-rows="4" data-cols="4" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="text-xs sm:text-sm font-black font-mono">4×4</div>
+            <div class="text-[10px] text-slate-400">9 Boxes</div>
+          </button>
+          <button type="button" data-rows="5" data-cols="5" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-cyan-500/15 border-cyan-400 text-white">
+            <div class="text-xs sm:text-sm font-black font-mono">5×5</div>
+            <div class="text-[10px] text-slate-400">16 Boxes</div>
+          </button>
+          <button type="button" data-rows="6" data-cols="6" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="text-xs sm:text-sm font-black font-mono">6×6</div>
+            <div class="text-[10px] text-slate-400">25 Boxes</div>
+          </button>
+          <button type="button" data-rows="7" data-cols="7" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="text-xs sm:text-sm font-black font-mono">7×7</div>
+            <div class="text-[10px] text-slate-400">36 Boxes</div>
+          </button>
+          <button type="button" data-rows="8" data-cols="8" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="text-xs sm:text-sm font-black font-mono">8×8</div>
+            <div class="text-[10px] text-slate-400">49 Boxes</div>
+          </button>
+          <button type="button" data-rows="10" data-cols="10" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="text-xs sm:text-sm font-black font-mono">10×10</div>
+            <div class="text-[10px] text-slate-400">81 Boxes</div>
+          </button>
+          <button type="button" data-rows="12" data-cols="12" class="dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="text-xs sm:text-sm font-black font-mono">12×12</div>
+            <div class="text-[10px] text-slate-400">121 Boxes</div>
+          </button>
+        </div>
+
+        <!-- Custom Rows & Columns Dot Steppers (3 to 15 Dots) -->
+        <div class="grid grid-cols-2 gap-2.5 bg-slate-900/75 border border-slate-800 rounded-2xl p-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold text-slate-400">Dot Rows</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="btnRowsDec" class="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base sm:text-sm transition active:scale-95">−</button>
+              <span id="customRowsVal" class="w-6 text-center font-mono text-xs sm:text-sm font-bold text-white">5</span>
+              <button type="button" id="btnRowsInc" class="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base sm:text-sm transition active:scale-95">+</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-2 border-l border-slate-800 pl-2.5">
+            <span class="text-[11px] font-semibold text-slate-400">Dot Cols</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="btnColsDec" class="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base sm:text-sm transition active:scale-95">−</button>
+              <span id="customColsVal" class="w-6 text-center font-mono text-xs sm:text-sm font-bold text-white">5</span>
+              <button type="button" id="btnColsInc" class="w-9 h-9 sm:w-7 sm:h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-base sm:text-sm transition active:scale-95">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Select Dual Player Gradient Colors -->
+      <div class="mb-5">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">3. Player Gradient Colors</label>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <!-- Theme 1: Cyan vs Rose -->
+          <button type="button" data-theme="cyan-rose"
+            class="theme-btn p-2.5 rounded-2xl border transition flex items-center justify-between bg-cyan-500/15 border-cyan-400 text-white">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-lg bg-gradient-to-br from-cyan-400/70 to-blue-600/30 border border-cyan-300"></span>
+              <span class="text-xs font-bold">vs</span>
+              <span class="w-5 h-5 rounded-lg bg-gradient-to-br from-rose-400/70 to-pink-600/30 border border-rose-300"></span>
+            </div>
+            <span class="text-[11px] font-semibold">Cyan / Rose</span>
+          </button>
+
+          <!-- Theme 2: Emerald vs Amber -->
+          <button type="button" data-theme="emerald-amber"
+            class="theme-btn p-2.5 rounded-2xl border transition flex items-center justify-between bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-lg bg-gradient-to-br from-emerald-400/70 to-teal-600/30 border border-emerald-300"></span>
+              <span class="text-xs font-bold">vs</span>
+              <span class="w-5 h-5 rounded-lg bg-gradient-to-br from-amber-400/70 to-orange-600/30 border border-amber-300"></span>
+            </div>
+            <span class="text-[11px] font-semibold">Mint / Gold</span>
+          </button>
+
+          <!-- Theme 3: Violet vs Lime -->
+          <button type="button" data-theme="violet-lime"
+            class="theme-btn p-2.5 rounded-2xl border transition flex items-center justify-between bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-lg bg-gradient-to-br from-violet-400/70 to-indigo-600/30 border border-violet-300"></span>
+              <span class="text-xs font-bold">vs</span>
+              <span class="w-5 h-5 rounded-lg bg-gradient-to-br from-lime-400/70 to-green-600/30 border border-lime-300"></span>
+            </div>
+            <span class="text-[11px] font-semibold">Violet / Lime</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Local / Bot Player Name Inputs -->
+      <div id="localNamesSection" class="mb-6 grid grid-cols-2 gap-3">
+        <div>
+          <label for="inputP1Name" class="block text-[11px] font-semibold text-slate-400 mb-1">Player 1 Name</label>
+          <input id="inputP1Name" type="text" maxlength="14" value="Player 1" placeholder="Player 1"
+            class="w-full px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-sm text-white focus:outline-none focus:border-cyan-400" />
+        </div>
+        <div id="p2NameFieldWrapper">
+          <label for="inputP2Name" class="block text-[11px] font-semibold text-slate-400 mb-1">Player 2 Name</label>
+          <input id="inputP2Name" type="text" maxlength="14" value="Player 2" placeholder="Player 2"
+            class="w-full px-3 py-2 rounded-xl bg-slate-900/90 border border-slate-700 text-sm text-white focus:outline-none focus:border-rose-400" />
+        </div>
+      </div>
+
+      <!-- Offline / Local Start Button -->
+      <div id="offlineStartSection">
+        <button id="btnStartOfflineGame" type="button"
+          class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-sm sm:text-base font-extrabold text-white shadow-xl shadow-cyan-950/50 transition active:scale-[0.99]">
+          Start 1v1 Match
+        </button>
+      </div>
+
+      <!-- Online 1v1 Multiplayer Panel -->
+      <div id="onlineLobbySection" class="hidden space-y-4 border-t border-slate-800 pt-4">
+        <!-- Player Display Name & Full User ID -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3 space-y-2">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div class="flex-1">
+              <label for="inputOnlineName" class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Your Display Name</label>
+              <input id="inputOnlineName" type="text" maxlength="14" value="Player" placeholder="Enter your name"
+                class="w-full px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs sm:text-sm text-white focus:outline-none focus:border-cyan-400" />
+            </div>
+            <div class="sm:text-right">
+              <span class="block text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1">Connection Status</span>
+              <span id="firebaseAuthBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-medium text-amber-300">
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                Connecting...
+              </span>
+            </div>
+          </div>
+          <!-- Full User ID Discoverability -->
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80 text-[11px]">
+            <span class="text-slate-400 shrink-0">Your User ID:</span>
+            <code id="fullUserIdDisplay" class="font-mono text-slate-300 truncate select-all">authenticating...</code>
+            <button id="btnCopyUserId" type="button" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold shrink-0">
+              Copy ID
+            </button>
+          </div>
+        </div>
+
+        <!-- Create Room or Join by Code -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button id="btnCreateOnlineRoom" type="button"
+            class="py-3 px-4 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-sm font-extrabold text-white shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Create 1v1 Room
+          </button>
+
+          <div class="flex items-center gap-1.5">
+            <input id="inputJoinRoomCode" type="text" maxlength="6" placeholder="ROOM CODE"
+              class="w-full px-3 py-3 rounded-2xl bg-slate-900 border border-slate-700 text-sm font-mono font-bold uppercase tracking-widest text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400" />
+            <button id="btnJoinOnlineRoom" type="button"
+              class="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-sm font-bold text-white transition active:scale-95 shrink-0">
+              Join
+            </button>
+          </div>
+        </div>
+
+        <!-- Live Open 1v1 Rooms List -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Open 1v1 Rooms Waiting for Opponent</span>
+            <span id="openRoomsCount" class="text-[11px] font-mono text-cyan-400">0 open</span>
+          </div>
+          <div id="openRoomsList" class="max-h-32 overflow-y-auto space-y-1.5 pr-1">
+            <div class="text-xs text-slate-500 text-center py-3 bg-slate-900/50 rounded-xl border border-slate-800/70">
+              No open rooms right now. Create one to invite a friend!
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RULES MODAL -->
+  <div id="rulesModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md rounded-3xl p-6 border border-slate-700 shadow-2xl animate-pop-in">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-extrabold text-white">How to Play Dots &amp; Boxes (1v1)</h3>
+        <button id="btnCloseRules" type="button" class="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <ul class="space-y-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+          <span>Players take turns connecting <strong>two adjacent dots</strong> horizontally or vertically with a single line.</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+          <span>Whoever draws the <strong>4th and final line</strong> of a 1×1 square claims that box, fills it with their <strong>transparent gradient color</strong>, and scores <strong>+1 Box</strong>.</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+          <span><strong>Bonus Turn Rule:</strong> Completing one or two boxes grants you an immediate extra turn!</span>
+        </li>
+        <li class="flex items-start gap-2.5">
+          <span class="w-5 h-5 rounded-full bg-cyan-500/20 text-cyan-300 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
+          <span>When all dots are connected and every square is claimed, the player with the <strong>most boxes</strong> wins!</span>
+        </li>
+      </ul>
+      <button id="btnGotItRules" type="button"
+        class="mt-6 w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-sm font-bold text-white transition">
+        Got It
+      </button>
+    </div>
+  </div>
+
+  <!-- CONFIRM RESET MODAL (Custom replacement for confirm()) -->
+  <div id="confirmResetModal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-sm rounded-3xl p-6 border border-slate-700 shadow-2xl animate-pop-in text-center">
+      <h3 class="text-lg font-extrabold text-white mb-2">Restart Current Match?</h3>
+      <p class="text-xs sm:text-sm text-slate-300 mb-5">All drawn lines and claimed gradient boxes on the current board will be cleared.</p>
+      <div class="flex items-center justify-center gap-3">
+        <button id="btnCancelReset" type="button"
+          class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs sm:text-sm font-semibold text-slate-300 transition">
+          Cancel
+        </button>
+        <button id="btnConfirmReset" type="button"
+          class="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-xs sm:text-sm font-bold text-white transition">
+          Reset Board
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase & Game Logic -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      setDoc,
+      updateDoc,
+      deleteDoc,
+      onSnapshot,
+      collection
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // =========================================================================
+    // 1. COLOR PALETTES (GRADIENT TRANSPARENT SQUARES + LINE COLORS)
+    // =========================================================================
+    const COLOR_THEMES = {
+      'cyan-rose': {
+        id: 'cyan-rose',
+        p1: {
+          primary: '#22d3ee',
+          secondary: '#3b82f6',
+          glow: 'rgba(34, 211, 238, 0.55)',
+          gradStart: 'rgba(34, 211, 238, 0.42)',
+          gradEnd: 'rgba(59, 130, 246, 0.14)',
+          border: 'rgba(34, 211, 238, 0.65)',
+          textClass: 'text-cyan-300',
+          borderClass: 'border-cyan-400',
+          dotBg: '#22d3ee'
+        },
+        p2: {
+          primary: '#fb7185',
+          secondary: '#ec4899',
+          glow: 'rgba(251, 113, 133, 0.55)',
+          gradStart: 'rgba(251, 113, 133, 0.42)',
+          gradEnd: 'rgba(236, 72, 153, 0.14)',
+          border: 'rgba(251, 113, 133, 0.65)',
+          textClass: 'text-rose-300',
+          borderClass: 'border-rose-400',
+          dotBg: '#fb7185'
+        }
+      },
+      'emerald-amber': {
+        id: 'emerald-amber',
+        p1: {
+          primary: '#34d399',
+          secondary: '#0d9488',
+          glow: 'rgba(52, 211, 153, 0.55)',
+          gradStart: 'rgba(52, 211, 153, 0.42)',
+          gradEnd: 'rgba(13, 148, 136, 0.14)',
+          border: 'rgba(52, 211, 153, 0.65)',
+          textClass: 'text-emerald-300',
+          borderClass: 'border-emerald-400',
+          dotBg: '#34d399'
+        },
+        p2: {
+          primary: '#fbbf24',
+          secondary: '#ea580c',
+          glow: 'rgba(251, 191, 36, 0.55)',
+          gradStart: 'rgba(251, 191, 36, 0.42)',
+          gradEnd: 'rgba(234, 88, 12, 0.14)',
+          border: 'rgba(251, 191, 36, 0.65)',
+          textClass: 'text-amber-300',
+          borderClass: 'border-amber-400',
+          dotBg: '#fbbf24'
+        }
+      },
+      'violet-lime': {
+        id: 'violet-lime',
+        p1: {
+          primary: '#a78bfa',
+          secondary: '#6366f1',
+          glow: 'rgba(167, 139, 250, 0.55)',
+          gradStart: 'rgba(167, 139, 250, 0.42)',
+          gradEnd: 'rgba(99, 102, 241, 0.14)',
+          border: 'rgba(167, 139, 250, 0.65)',
+          textClass: 'text-violet-300',
+          borderClass: 'border-violet-400',
+          dotBg: '#a78bfa'
+        },
+        p2: {
+          primary: '#a3e635',
+          secondary: '#16a34a',
+          glow: 'rgba(163, 230, 53, 0.55)',
+          gradStart: 'rgba(163, 230, 53, 0.42)',
+          gradEnd: 'rgba(22, 163, 74, 0.14)',
+          border: 'rgba(163, 230, 53, 0.65)',
+          textClass: 'text-lime-300',
+          borderClass: 'border-lime-400',
+          dotBg: '#a3e635'
+        }
+      }
+    };
+
+    // =========================================================================
+    // 2. SOUND ENGINE (TONE.JS WITH SAFE FALLBACK)
+    // =========================================================================
+    const SoundFX = {
+      enabled: true,
+      synth: null,
+      poly: null,
+      initialized: false,
+
+      async init() {
+        if (this.initialized || typeof Tone === 'undefined') return;
+        try {
+          await Tone.start();
+          this.synth = new Tone.Synth({
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.005, decay: 0.12, sustain: 0, release: 0.1 }
+          }).toDestination();
+          this.synth.volume.value = -8;
+
+          this.poly = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'triangle' },
+            envelope: { attack: 0.01, decay: 0.25, sustain: 0.1, release: 0.4 }
+          }).toDestination();
+          this.poly.volume.value = -6;
+          this.initialized = true;
+        } catch (err) {
+          console.warn('Audio init deferred:', err);
+        }
+      },
+
+      playLine(playerNum) {
+        if (!this.enabled) return;
+        this.init().then(() => {
+          if (!this.synth) return;
+          const note = playerNum === 1 ? 'C5' : 'E5';
+          this.synth.triggerAttackRelease(note, '32n');
+        });
+      },
+
+      playBox(count = 1) {
+        if (!this.enabled) return;
+        this.init().then(() => {
+          if (!this.poly) return;
+          const now = Tone.now();
+          if (count > 1) {
+            this.poly.triggerAttackRelease(['C5', 'E5', 'G5', 'B5'], '16n', now);
+          } else {
+            this.poly.triggerAttackRelease(['E5', 'G5', 'C6'], '16n', now);
+          }
+        });
+      },
+
+      playWin() {
+        if (!this.enabled) return;
+        this.init().then(() => {
+          if (!this.poly) return;
+          const now = Tone.now();
+          this.poly.triggerAttackRelease('C5', '16n', now);
+          this.poly.triggerAttackRelease('E5', '16n', now + 0.1);
+          this.poly.triggerAttackRelease('G5', '16n', now + 0.2);
+          this.poly.triggerAttackRelease(['C5', 'E5', 'G5', 'C6'], '4n', now + 0.32);
+        });
+      }
+    };
+
+    // =========================================================================
+    // 3. APPLICATION & GAME STATE
+    // =========================================================================
+    function create2DArray(rows, cols, defaultValue = 0) {
+      return Array.from({ length: rows }, () => Array(cols).fill(defaultValue));
+    }
+
+    const state = {
+      // Setup selections
+      selectedMode: 'local',      // 'local' | 'online' | 'bot'
+      selectedRows: 5,            // 3 to 15 dot rows
+      selectedCols: 5,            // 3 to 15 dot columns
+      selectedTheme: 'cyan-rose', // 'cyan-rose' | 'emerald-amber' | 'violet-lime'
+
+      // Active match state
+      mode: 'local',
+      rows: 5,
+      cols: 5,
+      themeId: 'cyan-rose',
+      p1Name: 'Player 1',
+      p2Name: 'Player 2',
+      p1Score: 0,
+      p2Score: 0,
+      hLines: create2DArray(5, 4, 0), // horizontal edges: rows x (cols - 1)
+      vLines: create2DArray(4, 5, 0), // vertical edges: (rows - 1) x cols
+      boxes: create2DArray(4, 4, 0),  // boxes: (rows - 1) x (cols - 1)
+      currentTurn: 1,                 // 1 or 2
+      gameOver: false,
+      winner: null,                   // 1 | 2 | 0 (tie)
+      lastMove: null,                 // { type: 'h' | 'v', r, c, player }
+      hoverEdge: null,                // { type: 'h' | 'v', r, c }
+      dragStartDot: null,             // { r, c } for mobile slide-to-connect gesture
+      isTouchGesture: false,          // Prevents duplicate ghost click after touchend
+      particles: [],
+      botTimeout: null,
+
+      // Online 1v1 multiplayer state
+      onlineTransport: 'peerjs',  // 'firebase' | 'peerjs'
+      roomId: null,
+      myPlayerNum: 1,
+      opponentConnected: false,
+      roomUnsubscribe: null,
+      lobbyUnsubscribe: null,
+      peerInstance: null,
+      peerConn: null,
+      localChannel: null
+    };
+
+    // =========================================================================
+    // 4. UTILITIES (TOASTS, URL SHARE & CLIPBOARD)
+    // =========================================================================
+    function getShareableRoomUrl(roomCode) {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set('room', roomCode);
+        return url.toString();
+      } catch (err) {
+        return roomCode;
+      }
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      const el = document.createElement('div');
+      const colorMap = {
+        info: 'bg-slate-900/95 border-cyan-500/40 text-slate-100',
+        success: 'bg-emerald-950/95 border-emerald-500/40 text-emerald-100',
+        error: 'bg-rose-950/95 border-rose-500/40 text-rose-100'
+      };
+      el.className = `pointer-events-auto px-4 py-2.5 rounded-2xl border shadow-xl text-xs sm:text-sm font-semibold backdrop-blur-md animate-pop-in ${colorMap[type] || colorMap.info}`;
+      el.textContent = message;
+      container.appendChild(el);
+
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(-6px)';
+        el.style.transition = 'all 0.25s ease';
+        setTimeout(() => el.remove(), 260);
+      }, 2800);
+    }
+
+    function copyTextFallback(text, successMsg = 'Copied!') {
+      try {
+        const temp = document.createElement('textarea');
+        temp.value = text;
+        temp.style.position = 'fixed';
+        temp.style.left = '-9999px';
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        showToast(successMsg, 'success');
+      } catch (err) {
+        showToast('Could not copy text automatically.', 'error');
+      }
+    }
+
+    // =========================================================================
+    // 5. ONLINE 1V1 MULTIPLAYER ENGINE (FIREBASE + GITHUB PAGES P2P WEBRTC)
+    // =========================================================================
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'dots-and-boxes-1v1';
+    const P2P_PREFIX = 'dab1v1-snehashis-';
+
+    function getOrCreateLocalUserId() {
+      try {
+        let uid = localStorage.getItem('dab_local_uid');
+        if (!uid) {
+          uid = 'p2p_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36).slice(-4);
+          localStorage.setItem('dab_local_uid', uid);
+        }
+        return uid;
+      } catch (err) {
+        return 'p2p_' + Math.random().toString(36).substring(2, 10);
+      }
+    }
+
+    function getRoomsCollectionRef() {
+      return collection(db, 'artifacts', appId, 'public', 'data', 'dots_rooms');
+    }
+
+    function getRoomDocRef(roomId) {
+      return doc(db, 'artifacts', appId, 'public', 'data', 'dots_rooms', roomId);
+    }
+
+    function initP2PFallbackMode(badge, uidDisplay) {
+      state.onlineTransport = 'peerjs';
+      const localUid = getOrCreateLocalUserId();
+      currentUser = { uid: localUid };
+
+      if (uidDisplay) uidDisplay.textContent = localUid;
+
+      if (typeof Peer === 'undefined') {
+        if (badge) {
+          badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-400"></span> P2P Unavailable`;
+          badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/80 text-xs font-medium text-rose-300';
+        }
+        return;
+      }
+
+      if (badge) {
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Online Ready (P2P)`;
+        badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-xs font-medium text-emerald-300';
+      }
+
+      const listEl = document.getElementById('openRoomsList');
+      const countEl = document.getElementById('openRoomsCount');
+      if (countEl) countEl.textContent = 'P2P Cloud';
+      if (listEl) {
+        listEl.innerHTML = `
+          <div class="text-xs text-slate-300 text-center py-3 px-3 bg-slate-900/65 rounded-xl border border-cyan-500/20">
+            Direct 1v1 P2P Cloud is active! Tap <strong class="text-cyan-300">Create 1v1 Room</strong> and share the 6-digit code or invite link with your opponent.
+          </div>`;
+      }
+
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          if (state.localChannel) state.localChannel.close();
+          state.localChannel = new BroadcastChannel('dab_1v1_lobby');
+          state.localChannel.onmessage = (event) => {
+            const msg = event.data;
+            if (!msg || !listEl) return;
+            if (msg.type === 'ANNOUNCE_ROOM' && msg.roomCode && msg.roomCode !== state.roomId) {
+              if (countEl) countEl.textContent = '1 nearby';
+              listEl.innerHTML = '';
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-left transition';
+              btn.innerHTML = `
+                <div>
+                  <div class="text-xs font-bold text-white">${escapeHtml(msg.p1Name || 'Challenger')}</div>
+                  <div class="text-[10px] text-slate-400 font-mono">${msg.rows}×${msg.cols} Dots • Code: <span class="text-cyan-300">${msg.roomCode}</span></div>
+                </div>
+                <span class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 text-xs font-bold">Join 1v1</span>
+              `;
+              btn.addEventListener('click', () => joinOnlineRoom(msg.roomCode));
+              listEl.appendChild(btn);
+            }
+          };
+        } catch (err) {
+          // Ignore BroadcastChannel restriction if any
+        }
+      }
+    }
+
+    async function initFirebase() {
+      const badge = document.getElementById('firebaseAuthBadge');
+      const uidDisplay = document.getElementById('fullUserIdDisplay');
+
+      try {
+        if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+          initP2PFallbackMode(badge, uidDisplay);
+          return;
+        }
+
+        state.onlineTransport = 'firebase';
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        onAuthStateChanged(auth, (user) => {
+          currentUser = user;
+          if (user) {
+            if (badge) {
+              badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Online Ready`;
+              badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-xs font-medium text-emerald-300';
+            }
+            if (uidDisplay) uidDisplay.textContent = user.uid;
+            subscribeToOpenRooms();
+          }
+        });
+
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (err) {
+        console.warn('Firebase init error, switching to P2P cloud:', err);
+        initP2PFallbackMode(badge, uidDisplay);
+      }
+    }
+
+    function generateRoomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    function subscribeToOpenRooms() {
+      if (!db || !currentUser) return;
+      if (state.lobbyUnsubscribe) state.lobbyUnsubscribe();
+
+      state.lobbyUnsubscribe = onSnapshot(
+        getRoomsCollectionRef(),
+        (snapshot) => {
+          const listEl = document.getElementById('openRoomsList');
+          const countEl = document.getElementById('openRoomsCount');
+          if (!listEl || !countEl) return;
+
+          const openRooms = [];
+          const now = Date.now();
+
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (
+              data &&
+              data.status === 'waiting' &&
+              !data.p2Uid &&
+              data.p1Uid !== currentUser.uid &&
+              now - (data.updatedAt || 0) < 1000 * 60 * 30
+            ) {
+              openRooms.push({ id: docSnap.id, ...data });
+            }
+          });
+
+          countEl.textContent = `${openRooms.length} open`;
+
+          if (openRooms.length === 0) {
+            listEl.innerHTML = `
+              <div class="text-xs text-slate-500 text-center py-3 bg-slate-900/50 rounded-xl border border-slate-800/70">
+                No open rooms right now. Create one to invite a friend!
+              </div>`;
+            return;
+          }
+
+          listEl.innerHTML = '';
+          openRooms.forEach((room) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'w-full flex items-center justify-between px-3 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-left transition';
+            btn.innerHTML = `
+              <div>
+                <div class="text-xs font-bold text-white">${escapeHtml(room.p1Name || 'Challenger')}</div>
+                <div class="text-[10px] text-slate-400 font-mono">${room.rows}×${room.cols} Dots • Code: <span class="text-cyan-300">${room.id}</span></div>
+              </div>
+              <span class="px-2.5 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 text-xs font-bold">Join 1v1</span>
+            `;
+            btn.addEventListener('click', () => joinOnlineRoom(room.id));
+            listEl.appendChild(btn);
+          });
+        },
+        (err) => {
+          console.warn('Lobby snapshot error:', err);
+        }
+      );
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    async function createOnlineRoom() {
+      if (state.onlineTransport === 'peerjs') {
+        createOnlineRoomP2P();
+        return;
+      }
+
+      if (!db || !currentUser) {
+        showToast('Online multiplayer requires an active connection.', 'error');
+        return;
+      }
+
+      const playerName = (document.getElementById('inputOnlineName').value || '').trim() || 'Player 1';
+      const roomCode = generateRoomCode();
+      const rows = state.selectedRows;
+      const cols = state.selectedCols;
+      const themeId = state.selectedTheme;
+
+      const roomPayload = {
+        status: 'waiting',
+        rows,
+        cols,
+        themeId,
+        p1Uid: currentUser.uid,
+        p1Name: playerName,
+        p2Uid: null,
+        p2Name: 'Waiting...',
+        p1Score: 0,
+        p2Score: 0,
+        currentTurn: 1,
+        gameOver: false,
+        winner: null,
+        lastMove: null,
+        hLinesJson: JSON.stringify(create2DArray(rows, cols - 1, 0)),
+        vLinesJson: JSON.stringify(create2DArray(rows - 1, cols, 0)),
+        boxesJson: JSON.stringify(create2DArray(rows - 1, cols - 1, 0)),
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      try {
+        await setDoc(getRoomDocRef(roomCode), roomPayload);
+        enterOnlineMatch(roomCode, 1, roomPayload);
+        showToast(`1v1 Room ${roomCode} created! Share the code.`, 'success');
+      } catch (err) {
+        console.error('Create room failed:', err);
+        showToast('Failed to create online room.', 'error');
+      }
+    }
+
+    async function joinOnlineRoom(rawCode) {
+      if (state.onlineTransport === 'peerjs') {
+        joinOnlineRoomP2P(rawCode);
+        return;
+      }
+
+      if (!db || !currentUser) {
+        showToast('Online multiplayer requires an active connection.', 'error');
+        return;
+      }
+
+      const roomCode = (rawCode || '').trim().toUpperCase();
+      if (roomCode.length < 4) {
+        showToast('Enter a valid 6-character Room Code.', 'error');
+        return;
+      }
+
+      const playerName = (document.getElementById('inputOnlineName').value || '').trim() || 'Player 2';
+
+      try {
+        const roomRef = getRoomDocRef(roomCode);
+        const snap = await getDoc(roomRef);
+
+        if (!snap.exists()) {
+          showToast(`Room "${roomCode}" not found.`, 'error');
+          return;
+        }
+
+        const data = snap.data();
+
+        if (data.p1Uid === currentUser.uid) {
+          enterOnlineMatch(roomCode, 1, data);
+          return;
+        }
+        if (data.p2Uid === currentUser.uid) {
+          enterOnlineMatch(roomCode, 2, data);
+          return;
+        }
+
+        if (data.p2Uid && data.p2Uid !== currentUser.uid) {
+          showToast('This 1v1 room is already full (2/2 players)!', 'error');
+          return;
+        }
+
+        const updatedFields = {
+          status: 'playing',
+          p2Uid: currentUser.uid,
+          p2Name: playerName,
+          updatedAt: Date.now()
+        };
+
+        await updateDoc(roomRef, updatedFields);
+        enterOnlineMatch(roomCode, 2, { ...data, ...updatedFields });
+        showToast(`Joined ${data.p1Name}'s 1v1 match!`, 'success');
+      } catch (err) {
+        console.error('Join room failed:', err);
+        showToast('Unable to join room. Please try again.', 'error');
+      }
+    }
+
+    function serializeCurrentMatchPayload() {
+      return {
+        rows: state.rows,
+        cols: state.cols,
+        themeId: state.themeId,
+        p1Name: state.p1Name,
+        p2Name: state.p2Name,
+        p1Score: state.p1Score,
+        p2Score: state.p2Score,
+        currentTurn: state.currentTurn,
+        gameOver: state.gameOver,
+        winner: state.winner,
+        lastMove: state.lastMove,
+        hLinesJson: JSON.stringify(state.hLines),
+        vLinesJson: JSON.stringify(state.vLines),
+        boxesJson: JSON.stringify(state.boxes)
+      };
+    }
+
+    function applyRemoteMatchSnapshot(remote) {
+      const prevLastMove = JSON.stringify(state.lastMove);
+      const nextLastMove = JSON.stringify(remote.lastMove);
+      const prevBoxes = state.boxes;
+      const nextBoxes = JSON.parse(remote.boxesJson);
+
+      state.p1Name = remote.p1Name || state.p1Name;
+      state.p2Name = remote.p2Name || state.p2Name;
+      state.p1Score = remote.p1Score || 0;
+      state.p2Score = remote.p2Score || 0;
+      state.currentTurn = remote.currentTurn || 1;
+      state.gameOver = Boolean(remote.gameOver);
+      state.winner = remote.winner ?? null;
+      state.lastMove = remote.lastMove || null;
+      state.hLines = JSON.parse(remote.hLinesJson);
+      state.vLines = JSON.parse(remote.vLinesJson);
+      state.boxes = nextBoxes;
+
+      if (prevLastMove !== nextLastMove && remote.lastMove && remote.lastMove.player !== state.myPlayerNum) {
+        let newBoxCount = 0;
+        for (let r = 0; r < state.rows - 1; r++) {
+          for (let c = 0; c < state.cols - 1; c++) {
+            if (prevBoxes[r][c] === 0 && nextBoxes[r][c] !== 0) {
+              newBoxCount++;
+              spawnBoxParticles(r, c, nextBoxes[r][c]);
+            }
+          }
+        }
+        if (newBoxCount > 0) {
+          SoundFX.playBox(newBoxCount);
+        } else {
+          SoundFX.playLine(remote.lastMove.player);
+        }
+      }
+
+      if (state.gameOver && !document.getElementById('gameOverOverlay').classList.contains('shown-win')) {
+        SoundFX.playWin();
+      }
+
+      updateHUD();
+    }
+
+    function cleanupP2PInstances() {
+      try {
+        if (state.peerConn) {
+          state.peerConn.close();
+          state.peerConn = null;
+        }
+        if (state.peerInstance) {
+          state.peerInstance.destroy();
+          state.peerInstance = null;
+        }
+      } catch (err) {
+        // Ignore cleanup errors
+      }
+    }
+
+    function setupP2PConnectionHandlers(conn, isHost) {
+      state.peerConn = conn;
+
+      conn.on('data', (msg) => {
+        if (!msg || typeof msg !== 'object') return;
+
+        if (msg.type === 'ROOM_FULL') {
+          showToast('This 1v1 room is already full!', 'error');
+          leaveOnlineRoom(true);
+          return;
+        }
+
+        if (isHost && msg.type === 'HELLO_GUEST') {
+          state.p2Name = (msg.p2Name || '').trim() || 'Player 2';
+          state.opponentConnected = true;
+          showToast(`${state.p2Name} joined the 1v1 match!`, 'success');
+          SoundFX.playBox(1);
+          updateHUD();
+
+          conn.send({
+            type: 'WELCOME_STATE',
+            payload: serializeCurrentMatchPayload()
+          });
+          return;
+        }
+
+        if (!isHost && msg.type === 'WELCOME_STATE') {
+          const payload = msg.payload;
+          state.rows = payload.rows;
+          state.cols = payload.cols;
+          state.themeId = payload.themeId || 'cyan-rose';
+          state.p1Name = payload.p1Name || 'Player 1';
+          state.p2Name = payload.p2Name || state.p2Name;
+          state.opponentConnected = true;
+          applyRemoteMatchSnapshot(payload);
+          resizeCanvas();
+          updateHUD();
+          showToast(`Connected to ${state.p1Name}'s 1v1 room!`, 'success');
+          SoundFX.playBox(1);
+          return;
+        }
+
+        if (msg.type === 'SYNC_STATE' && msg.payload) {
+          applyRemoteMatchSnapshot(msg.payload);
+        }
+      });
+
+      conn.on('close', () => {
+        if (state.mode === 'online' && state.roomId) {
+          state.opponentConnected = false;
+          showToast('Opponent disconnected from the 1v1 room.', 'error');
+          updateHUD();
+        }
+      });
+
+      conn.on('error', (err) => {
+        console.warn('P2P connection error:', err);
+      });
+    }
+
+    function createOnlineRoomP2P() {
+      if (typeof Peer === 'undefined') {
+        showToast('P2P library could not load. Check your internet connection.', 'error');
+        return;
+      }
+
+      cleanupP2PInstances();
+
+      const playerName = (document.getElementById('inputOnlineName').value || '').trim() || 'Player 1';
+      const roomCode = generateRoomCode();
+      const rows = state.selectedRows;
+      const cols = state.selectedCols;
+      const themeId = state.selectedTheme;
+
+      const createBtn = document.getElementById('btnCreateOnlineRoom');
+      if (createBtn) {
+        createBtn.disabled = true;
+        createBtn.textContent = 'Creating Room...';
+      }
+
+      const peer = new Peer(P2P_PREFIX + roomCode, { debug: 1 });
+      state.peerInstance = peer;
+
+      peer.on('open', () => {
+        if (createBtn) {
+          createBtn.disabled = false;
+          createBtn.innerHTML = `
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Create 1v1 Room`;
+        }
+
+        const roomPayload = {
+          rows,
+          cols,
+          themeId,
+          p1Name: playerName,
+          p2Name: 'Waiting...',
+          p1Score: 0,
+          p2Score: 0,
+          currentTurn: 1,
+          gameOver: false,
+          winner: null,
+          lastMove: null,
+          hLinesJson: JSON.stringify(create2DArray(rows, cols - 1, 0)),
+          vLinesJson: JSON.stringify(create2DArray(rows - 1, cols, 0)),
+          boxesJson: JSON.stringify(create2DArray(rows - 1, cols - 1, 0)),
+          p2Uid: null
+        };
+
+        enterOnlineMatchP2P(roomCode, 1, roomPayload);
+        showToast(`1v1 Room ${roomCode} created! Share code or link.`, 'success');
+
+        if (state.localChannel) {
+          state.localChannel.postMessage({
+            type: 'ANNOUNCE_ROOM',
+            roomCode,
+            p1Name: playerName,
+            rows,
+            cols
+          });
+        }
+      });
+
+      peer.on('connection', (incomingConn) => {
+        if (state.opponentConnected && state.peerConn && state.peerConn.open) {
+          incomingConn.on('open', () => {
+            incomingConn.send({ type: 'ROOM_FULL' });
+            setTimeout(() => incomingConn.close(), 300);
+          });
+          return;
+        }
+        setupP2PConnectionHandlers(incomingConn, true);
+      });
+
+      peer.on('error', (err) => {
+        console.warn('Peer host error:', err);
+        if (createBtn) {
+          createBtn.disabled = false;
+          createBtn.textContent = 'Create 1v1 Room';
+        }
+        if (err.type === 'unavailable-id') {
+          createOnlineRoomP2P();
+        } else {
+          showToast('Could not connect to P2P signaling server. Check internet.', 'error');
+        }
+      });
+    }
+
+    function joinOnlineRoomP2P(rawCode) {
+      if (typeof Peer === 'undefined') {
+        showToast('P2P library could not load. Check your internet connection.', 'error');
+        return;
+      }
+
+      const roomCode = (rawCode || '').trim().toUpperCase();
+      if (roomCode.length < 4) {
+        showToast('Enter a valid 6-character Room Code.', 'error');
+        return;
+      }
+
+      cleanupP2PInstances();
+
+      const playerName = (document.getElementById('inputOnlineName').value || '').trim() || 'Player 2';
+      const joinBtn = document.getElementById('btnJoinOnlineRoom');
+      if (joinBtn) {
+        joinBtn.disabled = true;
+        joinBtn.textContent = 'Joining...';
+      }
+
+      const peer = new Peer(undefined, { debug: 1 });
+      state.peerInstance = peer;
+
+      const timeoutId = setTimeout(() => {
+        if (!state.opponentConnected) {
+          if (joinBtn) {
+            joinBtn.disabled = false;
+            joinBtn.textContent = 'Join';
+          }
+          showToast(`Room "${roomCode}" not found or host is offline.`, 'error');
+          cleanupP2PInstances();
+        }
+      }, 10000);
+
+      peer.on('open', () => {
+        const conn = peer.connect(P2P_PREFIX + roomCode, { reliable: true });
+        setupP2PConnectionHandlers(conn, false);
+
+        conn.on('open', () => {
+          clearTimeout(timeoutId);
+          if (joinBtn) {
+            joinBtn.disabled = false;
+            joinBtn.textContent = 'Join';
+          }
+
+          const placeholderPayload = {
+            rows: state.selectedRows,
+            cols: state.selectedCols,
+            themeId: state.selectedTheme,
+            p1Name: 'Host',
+            p2Name: playerName,
+            p1Score: 0,
+            p2Score: 0,
+            currentTurn: 1,
+            gameOver: false,
+            winner: null,
+            lastMove: null,
+            hLinesJson: JSON.stringify(create2DArray(state.selectedRows, state.selectedCols - 1, 0)),
+            vLinesJson: JSON.stringify(create2DArray(state.selectedRows - 1, state.selectedCols, 0)),
+            boxesJson: JSON.stringify(create2DArray(state.selectedRows - 1, state.selectedCols - 1, 0)),
+            p2Uid: currentUser ? currentUser.uid : 'guest'
+          };
+
+          enterOnlineMatchP2P(roomCode, 2, placeholderPayload);
+          conn.send({
+            type: 'HELLO_GUEST',
+            p2Name: playerName,
+            p2Uid: currentUser ? currentUser.uid : 'guest'
+          });
+        });
+      });
+
+      peer.on('error', (err) => {
+        clearTimeout(timeoutId);
+        console.warn('Peer join error:', err);
+        if (joinBtn) {
+          joinBtn.disabled = false;
+          joinBtn.textContent = 'Join';
+        }
+        showToast(`Could not join Room "${roomCode}". Verify the code and try again.`, 'error');
+      });
+    }
+
+    function enterOnlineMatchP2P(roomCode, playerNum, roomData) {
+      if (state.botTimeout) clearTimeout(state.botTimeout);
+      if (state.roomUnsubscribe) {
+        state.roomUnsubscribe();
+        state.roomUnsubscribe = null;
+      }
+
+      state.mode = 'online';
+      state.roomId = roomCode;
+      state.myPlayerNum = playerNum;
+      state.rows = roomData.rows;
+      state.cols = roomData.cols;
+      state.themeId = roomData.themeId || 'cyan-rose';
+      state.p1Name = roomData.p1Name || 'Player 1';
+      state.p2Name = roomData.p2Name || 'Waiting...';
+      state.p1Score = roomData.p1Score || 0;
+      state.p2Score = roomData.p2Score || 0;
+      state.currentTurn = roomData.currentTurn || 1;
+      state.gameOver = Boolean(roomData.gameOver);
+      state.winner = roomData.winner ?? null;
+      state.lastMove = roomData.lastMove || null;
+      state.hLines = JSON.parse(roomData.hLinesJson);
+      state.vLines = JSON.parse(roomData.vLinesJson);
+      state.boxes = JSON.parse(roomData.boxesJson);
+      state.opponentConnected = Boolean(roomData.p2Uid);
+      state.particles = [];
+
+      document.getElementById('setupModal').classList.add('hidden');
+      document.getElementById('onlineRoomBar').classList.remove('hidden');
+      document.getElementById('activeRoomCodeDisplay').textContent = roomCode;
+      document.getElementById('overlayRoomCode').textContent = roomCode;
+
+      requestAnimationFrame(() => resizeCanvas());
+      updateHUD();
+    }
+
+    function enterOnlineMatch(roomCode, playerNum, roomData) {
+      if (state.botTimeout) clearTimeout(state.botTimeout);
+      if (state.roomUnsubscribe) state.roomUnsubscribe();
+
+      state.mode = 'online';
+      state.roomId = roomCode;
+      state.myPlayerNum = playerNum;
+      state.rows = roomData.rows;
+      state.cols = roomData.cols;
+      state.themeId = roomData.themeId || 'cyan-rose';
+      state.p1Name = roomData.p1Name || 'Player 1';
+      state.p2Name = roomData.p2Name || 'Waiting...';
+      state.p1Score = roomData.p1Score || 0;
+      state.p2Score = roomData.p2Score || 0;
+      state.currentTurn = roomData.currentTurn || 1;
+      state.gameOver = Boolean(roomData.gameOver);
+      state.winner = roomData.winner ?? null;
+      state.lastMove = roomData.lastMove || null;
+      state.hLines = JSON.parse(roomData.hLinesJson);
+      state.vLines = JSON.parse(roomData.vLinesJson);
+      state.boxes = JSON.parse(roomData.boxesJson);
+      state.opponentConnected = Boolean(roomData.p2Uid);
+      state.particles = [];
+
+      document.getElementById('setupModal').classList.add('hidden');
+      document.getElementById('onlineRoomBar').classList.remove('hidden');
+      document.getElementById('activeRoomCodeDisplay').textContent = roomCode;
+      document.getElementById('overlayRoomCode').textContent = roomCode;
+
+      requestAnimationFrame(() => resizeCanvas());
+      updateHUD();
+
+      state.roomUnsubscribe = onSnapshot(getRoomDocRef(roomCode), (docSnap) => {
+        if (!docSnap.exists()) {
+          showToast('The online room was closed.', 'info');
+          leaveOnlineRoom(true);
+          return;
+        }
+
+        const remote = docSnap.data();
+        const wasWaiting = !state.opponentConnected;
+        state.opponentConnected = Boolean(remote.p2Uid);
+        state.p1Name = remote.p1Name || 'Player 1';
+        state.p2Name = remote.p2Name || 'Waiting...';
+        state.p1Score = remote.p1Score || 0;
+        state.p2Score = remote.p2Score || 0;
+        state.currentTurn = remote.currentTurn || 1;
+        state.gameOver = Boolean(remote.gameOver);
+        state.winner = remote.winner ?? null;
+
+        const prevLastMove = JSON.stringify(state.lastMove);
+        const nextLastMove = JSON.stringify(remote.lastMove);
+        state.lastMove = remote.lastMove || null;
+
+        const prevBoxes = state.boxes;
+        const nextBoxes = JSON.parse(remote.boxesJson);
+        state.hLines = JSON.parse(remote.hLinesJson);
+        state.vLines = JSON.parse(remote.vLinesJson);
+        state.boxes = nextBoxes;
+
+        if (wasWaiting && state.opponentConnected) {
+          showToast(`${state.p2Name} joined the 1v1 match!`, 'success');
+          SoundFX.playBox(1);
+        } else if (prevLastMove !== nextLastMove && remote.lastMove && remote.lastMove.player !== state.myPlayerNum) {
+          let newBoxCount = 0;
+          for (let r = 0; r < state.rows - 1; r++) {
+            for (let c = 0; c < state.cols - 1; c++) {
+              if (prevBoxes[r][c] === 0 && nextBoxes[r][c] !== 0) {
+                newBoxCount++;
+                spawnBoxParticles(r, c, nextBoxes[r][c]);
+              }
+            }
+          }
+          if (newBoxCount > 0) {
+            SoundFX.playBox(newBoxCount);
+          } else {
+            SoundFX.playLine(remote.lastMove.player);
+          }
+        }
+
+        if (state.gameOver && !document.getElementById('gameOverOverlay').classList.contains('shown-win')) {
+          SoundFX.playWin();
+        }
+
+        updateHUD();
+      });
+    }
+
+    async function syncOnlineState() {
+      if (state.mode !== 'online' || !state.roomId) return;
+
+      if (state.onlineTransport === 'peerjs') {
+        if (state.peerConn && state.peerConn.open) {
+          try {
+            state.peerConn.send({
+              type: 'SYNC_STATE',
+              payload: serializeCurrentMatchPayload()
+            });
+          } catch (err) {
+            console.error('P2P sync error:', err);
+          }
+        }
+        return;
+      }
+
+      if (!db) return;
+      try {
+        await updateDoc(getRoomDocRef(state.roomId), {
+          p1Score: state.p1Score,
+          p2Score: state.p2Score,
+          currentTurn: state.currentTurn,
+          gameOver: state.gameOver,
+          winner: state.winner,
+          lastMove: state.lastMove,
+          hLinesJson: JSON.stringify(state.hLines),
+          vLinesJson: JSON.stringify(state.vLines),
+          boxesJson: JSON.stringify(state.boxes),
+          updatedAt: Date.now()
+        });
+      } catch (err) {
+        console.error('Sync online state error:', err);
+      }
+    }
+
+    async function leaveOnlineRoom(alreadyDeleted = false) {
+      if (state.roomUnsubscribe) {
+        state.roomUnsubscribe();
+        state.roomUnsubscribe = null;
+      }
+
+      cleanupP2PInstances();
+
+      const oldRoomId = state.roomId;
+      const wasHost = state.myPlayerNum === 1;
+
+      state.roomId = null;
+      state.opponentConnected = false;
+      document.getElementById('onlineRoomBar').classList.add('hidden');
+      document.getElementById('waitingOverlay').classList.add('hidden');
+
+      if (!alreadyDeleted && oldRoomId && db && wasHost) {
+        try {
+          await deleteDoc(getRoomDocRef(oldRoomId));
+        } catch (err) {
+          // Ignore cleanup errors
+        }
+      }
+
+      state.mode = 'local';
+      document.getElementById('setupModal').classList.remove('hidden');
+      updateHUD();
+    }
+
+    // =========================================================================
+    // 6. CORE GAMEPLAY & BOX CAPTURE LOGIC
+    // =========================================================================
+    function startOfflineMatch() {
+      if (state.botTimeout) clearTimeout(state.botTimeout);
+      if (state.roomUnsubscribe) {
+        state.roomUnsubscribe();
+        state.roomUnsubscribe = null;
+      }
+
+      cleanupP2PInstances();
+      state.roomId = null;
+      state.opponentConnected = false;
+      document.getElementById('onlineRoomBar').classList.add('hidden');
+      document.getElementById('waitingOverlay').classList.add('hidden');
+
+      state.mode = state.selectedMode === 'bot' ? 'bot' : 'local';
+      state.rows = state.selectedRows;
+      state.cols = state.selectedCols;
+      state.themeId = state.selectedTheme;
+
+      const rawP1 = (document.getElementById('inputP1Name').value || '').trim();
+      const rawP2 = (document.getElementById('inputP2Name').value || '').trim();
+
+      state.p1Name = rawP1 || 'Player 1';
+      state.p2Name = state.mode === 'bot' ? 'Tactical Bot' : (rawP2 || 'Player 2');
+
+      document.getElementById('setupModal').classList.add('hidden');
+      resetMatchBoard();
+      requestAnimationFrame(() => resizeCanvas());
+    }
+
+    function resetMatchBoard() {
+      if (state.botTimeout) clearTimeout(state.botTimeout);
+
+      state.p1Score = 0;
+      state.p2Score = 0;
+      state.hLines = create2DArray(state.rows, state.cols - 1, 0);
+      state.vLines = create2DArray(state.rows - 1, state.cols, 0);
+      state.boxes = create2DArray(state.rows - 1, state.cols - 1, 0);
+      state.currentTurn = 1;
+      state.gameOver = false;
+      state.winner = null;
+      state.lastMove = null;
+      state.hoverEdge = null;
+      state.dragStartDot = null;
+      state.particles = [];
+
+      const overEl = document.getElementById('gameOverOverlay');
+      overEl.classList.add('hidden');
+      overEl.classList.remove('shown-win');
+
+      resizeCanvas();
+      updateHUD();
+
+      if (state.mode === 'online') {
+        syncOnlineState();
+      }
+    }
+
+    function isBoxComplete(r, c) {
+      if (r < 0 || r >= state.rows - 1 || c < 0 || c >= state.cols - 1) return false;
+      return (
+        state.hLines[r][c] !== 0 &&
+        state.hLines[r + 1][c] !== 0 &&
+        state.vLines[r][c] !== 0 &&
+        state.vLines[r][c + 1] !== 0
+      );
+    }
+
+    function attemptMove(type, r, c, isBotMove = false) {
+      if (state.gameOver) return false;
+
+      if (state.mode === 'online') {
+        if (!state.opponentConnected) {
+          showToast('Wait for an opponent to join your 1v1 room!', 'info');
+          return false;
+        }
+        if (state.currentTurn !== state.myPlayerNum) {
+          showToast("Wait for your opponent's turn!", 'info');
+          return false;
+        }
+      }
+
+      if (state.mode === 'bot' && state.currentTurn === 2 && !isBotMove) {
+        return false;
+      }
+
+      if (type === 'h') {
+        if (r < 0 || r >= state.rows || c < 0 || c >= state.cols - 1) return false;
+        if (state.hLines[r][c] !== 0) return false;
+        state.hLines[r][c] = state.currentTurn;
+      } else if (type === 'v') {
+        if (r < 0 || r >= state.rows - 1 || c < 0 || c >= state.cols) return false;
+        if (state.vLines[r][c] !== 0) return false;
+        state.vLines[r][c] = state.currentTurn;
+      } else {
+        return false;
+      }
+
+      const activePlayer = state.currentTurn;
+      state.lastMove = { type, r, c, player: activePlayer };
+
+      // Check adjacent boxes completed by this line
+      let boxesClaimed = 0;
+      const candidates =
+        type === 'h'
+          ? [
+              [r - 1, c],
+              [r, c]
+            ]
+          : [
+              [r, c - 1],
+              [r, c]
+            ];
+
+      for (const [br, bc] of candidates) {
+        if (
+          br >= 0 &&
+          br < state.rows - 1 &&
+          bc >= 0 &&
+          bc < state.cols - 1 &&
+          state.boxes[br][bc] === 0 &&
+          isBoxComplete(br, bc)
+        ) {
+          state.boxes[br][bc] = activePlayer;
+          boxesClaimed++;
+          if (activePlayer === 1) state.p1Score++;
+          else state.p2Score++;
+          spawnBoxParticles(br, bc, activePlayer);
+        }
+      }
+
+      if (boxesClaimed > 0) {
+        SoundFX.playBox(boxesClaimed);
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(boxesClaimed > 1 ? [18, 25, 18] : 18);
+        }
+      } else {
+        SoundFX.playLine(activePlayer);
+        if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(10);
+        }
+        state.currentTurn = activePlayer === 1 ? 2 : 1;
+      }
+
+      // Check end of match
+      const totalBoxes = (state.rows - 1) * (state.cols - 1);
+      if (state.p1Score + state.p2Score >= totalBoxes) {
+        state.gameOver = true;
+        if (state.p1Score > state.p2Score) state.winner = 1;
+        else if (state.p2Score > state.p1Score) state.winner = 2;
+        else state.winner = 0;
+        SoundFX.playWin();
+      }
+
+      updateHUD();
+
+      if (state.mode === 'online') {
+        syncOnlineState();
+      } else if (state.mode === 'bot' && !state.gameOver && state.currentTurn === 2) {
+        state.botTimeout = setTimeout(executeSmartBotTurn, 420);
+      }
+
+      return true;
+    }
+
+    // =========================================================================
+    // 7. TACTICAL 1v1 BOT AI
+    // =========================================================================
+    function countBoxSides(br, bc, hGrid, vGrid) {
+      let count = 0;
+      if (hGrid[br][bc] !== 0) count++;
+      if (hGrid[br + 1][bc] !== 0) count++;
+      if (vGrid[br][bc] !== 0) count++;
+      if (vGrid[br][bc + 1] !== 0) count++;
+      return count;
+    }
+
+    function executeSmartBotTurn() {
+      if (state.gameOver || state.mode !== 'bot' || state.currentTurn !== 2) return;
+
+      const availableMoves = [];
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols - 1; c++) {
+          if (state.hLines[r][c] === 0) availableMoves.push({ type: 'h', r, c });
+        }
+      }
+      for (let r = 0; r < state.rows - 1; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          if (state.vLines[r][c] === 0) availableMoves.push({ type: 'v', r, c });
+        }
+      }
+
+      if (availableMoves.length === 0) return;
+
+      const scoringMoves = [];
+      const safeMoves = [];
+      const riskyMoves = [];
+
+      for (const move of availableMoves) {
+        const adj =
+          move.type === 'h'
+            ? [
+                [move.r - 1, move.c],
+                [move.r, move.c]
+              ]
+            : [
+                [move.r, move.c - 1],
+                [move.r, move.c]
+              ];
+
+        let completesBox = false;
+        let createsThreeSided = false;
+
+        for (const [br, bc] of adj) {
+          if (br >= 0 && br < state.rows - 1 && bc >= 0 && bc < state.cols - 1) {
+            const sides = countBoxSides(br, bc, state.hLines, state.vLines);
+            if (sides === 3) completesBox = true;
+            else if (sides === 2) createsThreeSided = true;
+          }
+        }
+
+        if (completesBox) scoringMoves.push(move);
+        else if (!createsThreeSided) safeMoves.push(move);
+        else riskyMoves.push(move);
+      }
+
+      let chosen = null;
+      if (scoringMoves.length > 0) {
+        chosen = scoringMoves[Math.floor(Math.random() * scoringMoves.length)];
+      } else if (safeMoves.length > 0) {
+        chosen = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+      } else {
+        chosen = riskyMoves[Math.floor(Math.random() * riskyMoves.length)];
+      }
+
+      attemptMove(chosen.type, chosen.r, chosen.c, true);
+    }
+
+    // =========================================================================
+    // 8. CANVAS RENDERING & INTERACTIVE HIT DETECTION
+    // =========================================================================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let boardMetrics = {
+      width: 300,
+      height: 300,
+      offsetX: 30,
+      offsetY: 30,
+      cellSize: 50,
+      dotRadius: 6,
+      lineWidth: 6
+    };
+
+    function resizeCanvas() {
+      const container = document.getElementById('boardContainer');
+      if (!container) return;
+
+      const styles = window.getComputedStyle(container);
+      const padX = (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+      const padY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
+      const innerW = container.clientWidth - padX;
+      const innerH = container.clientHeight - padY;
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const cssWidth = Math.max(240, Math.floor(innerW));
+      const cssHeight = Math.max(240, Math.floor(innerH));
+      const isCompact = cssWidth < 480;
+
+      canvas.width = Math.floor(cssWidth * dpr);
+      canvas.height = Math.floor(cssHeight * dpr);
+      canvas.style.width = `${cssWidth}px`;
+      canvas.style.height = `${cssHeight}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const padding = isCompact
+        ? Math.max(16, Math.min(cssWidth, cssHeight) * 0.06)
+        : Math.max(24, Math.min(cssWidth, cssHeight) * 0.08);
+      const availW = cssWidth - padding * 2;
+      const availH = cssHeight - padding * 2;
+
+      const gridColsSpan = Math.max(1, state.cols - 1);
+      const gridRowsSpan = Math.max(1, state.rows - 1);
+
+      const cellSize = Math.min(availW / gridColsSpan, availH / gridRowsSpan);
+      const boardW = cellSize * gridColsSpan;
+      const boardH = cellSize * gridRowsSpan;
+
+      const offsetX = (cssWidth - boardW) / 2;
+      const offsetY = (cssHeight - boardH) / 2;
+
+      const dotRadius = Math.max(4, Math.min(isCompact ? 9.5 : 8.5, cellSize * 0.14));
+      const lineWidth = Math.max(4.5, Math.min(isCompact ? 10 : 9, cellSize * 0.15));
+
+      boardMetrics = {
+        width: cssWidth,
+        height: cssHeight,
+        offsetX,
+        offsetY,
+        cellSize,
+        dotRadius,
+        lineWidth
+      };
+    }
+
+    function getDotCoords(r, c) {
+      return {
+        x: boardMetrics.offsetX + c * boardMetrics.cellSize,
+        y: boardMetrics.offsetY + r * boardMetrics.cellSize
+      };
+    }
+
+    function spawnBoxParticles(br, bc, playerNum) {
+      const theme = COLOR_THEMES[state.themeId] || COLOR_THEMES['cyan-rose'];
+      const pTheme = playerNum === 1 ? theme.p1 : theme.p2;
+      const topLeft = getDotCoords(br, bc);
+      const cx = topLeft.x + boardMetrics.cellSize / 2;
+      const cy = topLeft.y + boardMetrics.cellSize / 2;
+
+      for (let i = 0; i < 16; i++) {
+        const angle = (Math.PI * 2 * i) / 16 + Math.random() * 0.3;
+        const speed = 1.2 + Math.random() * 2.8;
+        state.particles.push({
+          x: cx,
+          y: cy,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          alpha: 1,
+          radius: 2 + Math.random() * 2.5,
+          color: i % 2 === 0 ? pTheme.primary : pTheme.secondary
+        });
+      }
+    }
+
+    function findNearestDot(px, py) {
+      const { cellSize } = boardMetrics;
+      const maxDotDist = Math.max(24, cellSize * 0.45);
+      let best = null;
+      let bestDist = maxDotDist;
+
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          const pt = getDotCoords(r, c);
+          const d = Math.hypot(px - pt.x, py - pt.y);
+          if (d < bestDist) {
+            bestDist = d;
+            best = { r, c };
+          }
+        }
+      }
+      return best;
+    }
+
+    function findEdgeFromDrag(startDot, px, py) {
+      if (!startDot) return null;
+      const startPt = getDotCoords(startDot.r, startDot.c);
+      const dx = px - startPt.x;
+      const dy = py - startPt.y;
+      const dist = Math.hypot(dx, dy);
+
+      const minDrag = Math.max(12, boardMetrics.cellSize * 0.22);
+      const maxDrag = boardMetrics.cellSize * 1.45;
+      if (dist < minDrag || dist > maxDrag) return null;
+
+      let candidate = null;
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        if (dx > 0 && startDot.c < state.cols - 1) {
+          candidate = { type: 'h', r: startDot.r, c: startDot.c };
+        } else if (dx < 0 && startDot.c > 0) {
+          candidate = { type: 'h', r: startDot.r, c: startDot.c - 1 };
+        }
+      } else {
+        if (dy > 0 && startDot.r < state.rows - 1) {
+          candidate = { type: 'v', r: startDot.r, c: startDot.c };
+        } else if (dy < 0 && startDot.r > 0) {
+          candidate = { type: 'v', r: startDot.r - 1, c: startDot.c };
+        }
+      }
+
+      if (!candidate) return null;
+      if (candidate.type === 'h' && state.hLines[candidate.r][candidate.c] !== 0) return null;
+      if (candidate.type === 'v' && state.vLines[candidate.r][candidate.c] !== 0) return null;
+      return candidate;
+    }
+
+    function findNearestAvailableEdge(px, py) {
+      const { cellSize } = boardMetrics;
+      const maxThreshold = Math.max(22, cellSize * 0.44);
+      let best = null;
+      let bestDist = maxThreshold;
+
+      // Check horizontal edges
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols - 1; c++) {
+          if (state.hLines[r][c] !== 0) continue;
+          const p1 = getDotCoords(r, c);
+          const p2 = getDotCoords(r, c + 1);
+          const dist = pointToSegmentDistance(px, py, p1.x, p1.y, p2.x, p2.y);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = { type: 'h', r, c };
+          }
+        }
+      }
+
+      // Check vertical edges
+      for (let r = 0; r < state.rows - 1; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          if (state.vLines[r][c] !== 0) continue;
+          const p1 = getDotCoords(r, c);
+          const p2 = getDotCoords(r + 1, c);
+          const dist = pointToSegmentDistance(px, py, p1.x, p1.y, p2.x, p2.y);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = { type: 'v', r, c };
+          }
+        }
+      }
+
+      return best;
+    }
+
+    function pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+      let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      const projX = x1 + t * dx;
+      const projY = y1 + t * dy;
+      return Math.hypot(px - projX, py - projY);
+    }
+
+    function traceRoundedRect(context, x, y, w, h, r) {
+      if (typeof context.roundRect === 'function') {
+        context.roundRect(x, y, w, h, r);
+        return;
+      }
+      const radius = Math.min(r, w / 2, h / 2);
+      context.moveTo(x + radius, y);
+      context.arcTo(x + w, y, x + w, y + h, radius);
+      context.arcTo(x + w, y + h, x, y + h, radius);
+      context.arcTo(x, y + h, x, y, radius);
+      context.arcTo(x, y, x + w, y, radius);
+      context.closePath();
+    }
+
+    function renderCanvas() {
+      const { width, height, cellSize, dotRadius, lineWidth } = boardMetrics;
+      const theme = COLOR_THEMES[state.themeId] || COLOR_THEMES['cyan-rose'];
+
+      ctx.clearRect(0, 0, width, height);
+
+      // 1. Draw Completed Boxes with Transparent Diagonal Gradient Fill
+      for (let r = 0; r < state.rows - 1; r++) {
+        for (let c = 0; c < state.cols - 1; c++) {
+          const owner = state.boxes[r][c];
+          if (owner === 0) continue;
+
+          const pTheme = owner === 1 ? theme.p1 : theme.p2;
+          const topLeft = getDotCoords(r, c);
+          const inset = Math.max(3, lineWidth * 0.55);
+          const boxX = topLeft.x + inset;
+          const boxY = topLeft.y + inset;
+          const boxSize = Math.max(4, cellSize - inset * 2);
+
+          const grad = ctx.createLinearGradient(boxX, boxY, boxX + boxSize, boxY + boxSize);
+          grad.addColorStop(0, pTheme.gradStart);
+          grad.addColorStop(1, pTheme.gradEnd);
+
+          ctx.save();
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          traceRoundedRect(ctx, boxX, boxY, boxSize, boxSize, Math.max(4, cellSize * 0.12));
+          ctx.fill();
+
+          // Subtle luminous border inside completed square
+          ctx.strokeStyle = pTheme.border;
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+
+          // Player initial watermark inside box
+          if (cellSize >= 28) {
+            const label = (owner === 1 ? state.p1Name : state.p2Name).charAt(0).toUpperCase();
+            ctx.fillStyle = pTheme.primary;
+            ctx.globalAlpha = 0.72;
+            ctx.font = `800 ${Math.max(11, Math.floor(cellSize * 0.34))}px Inter, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, topLeft.x + cellSize / 2, topLeft.y + cellSize / 2 + 1);
+          }
+          ctx.restore();
+        }
+      }
+
+      // 2. Draw Subtle Guide Tracks for Unclaimed Edges
+      ctx.save();
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.11)';
+      ctx.lineWidth = Math.max(2, lineWidth * 0.42);
+      ctx.lineCap = 'round';
+
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols - 1; c++) {
+          if (state.hLines[r][c] !== 0) continue;
+          const p1 = getDotCoords(r, c);
+          const p2 = getDotCoords(r, c + 1);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      }
+
+      for (let r = 0; r < state.rows - 1; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          if (state.vLines[r][c] !== 0) continue;
+          const p1 = getDotCoords(r, c);
+          const p2 = getDotCoords(r + 1, c);
+          ctx.beginPath();
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      // 3. Draw Hover / Touch Preview Edge
+      const canInteract =
+        !state.gameOver &&
+        !(state.mode === 'bot' && state.currentTurn === 2) &&
+        !(state.mode === 'online' && (!state.opponentConnected || state.currentTurn !== state.myPlayerNum));
+
+      if (canInteract && state.hoverEdge) {
+        const { type, r, c } = state.hoverEdge;
+        const activeTheme = state.currentTurn === 1 ? theme.p1 : theme.p2;
+        const p1 = getDotCoords(r, c);
+        const p2 = type === 'h' ? getDotCoords(r, c + 1) : getDotCoords(r + 1, c);
+
+        ctx.save();
+        ctx.strokeStyle = activeTheme.primary;
+        ctx.globalAlpha = 0.58;
+        ctx.lineWidth = lineWidth * 1.15;
+        ctx.lineCap = 'round';
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+
+        // Highlight the two dots being connected
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = activeTheme.primary;
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, dotRadius * 1.45, 0, Math.PI * 2);
+        ctx.arc(p2.x, p2.y, dotRadius * 1.45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Highlight touch drag origin dot when sliding on mobile
+      if (canInteract && state.dragStartDot) {
+        const activeTheme = state.currentTurn === 1 ? theme.p1 : theme.p2;
+        const originPt = getDotCoords(state.dragStartDot.r, state.dragStartDot.c);
+        ctx.save();
+        ctx.strokeStyle = activeTheme.primary;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(originPt.x, originPt.y, dotRadius * 1.85, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 4. Draw Drawn Lines (Horizontal & Vertical)
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols - 1; c++) {
+          const owner = state.hLines[r][c];
+          if (owner === 0) continue;
+          const isLast = state.lastMove && state.lastMove.type === 'h' && state.lastMove.r === r && state.lastMove.c === c;
+          drawPlayerLine(getDotCoords(r, c), getDotCoords(r, c + 1), owner, isLast, lineWidth, theme);
+        }
+      }
+
+      for (let r = 0; r < state.rows - 1; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          const owner = state.vLines[r][c];
+          if (owner === 0) continue;
+          const isLast = state.lastMove && state.lastMove.type === 'v' && state.lastMove.r === r && state.lastMove.c === c;
+          drawPlayerLine(getDotCoords(r, c), getDotCoords(r + 1, c), owner, isLast, lineWidth, theme);
+        }
+      }
+
+      // 5. Draw Grid Dots on Top
+      for (let r = 0; r < state.rows; r++) {
+        for (let c = 0; c < state.cols; c++) {
+          const pt = getDotCoords(r, c);
+          ctx.save();
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, dotRadius + 2.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#f8fafc';
+          ctx.shadowColor = 'rgba(248, 250, 252, 0.35)';
+          ctx.shadowBlur = 6;
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, dotRadius, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      // 6. Update & Render Celebration Particles
+      for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vx *= 0.96;
+        p.vy *= 0.96;
+        p.alpha -= 0.025;
+
+        if (p.alpha <= 0) {
+          state.particles.splice(i, 1);
+          continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawPlayerLine(p1, p2, owner, isLast, lineWidth, theme) {
+      const pTheme = owner === 1 ? theme.p1 : theme.p2;
+      ctx.save();
+      ctx.strokeStyle = pTheme.primary;
+      ctx.lineWidth = isLast ? lineWidth * 1.15 : lineWidth;
+      ctx.lineCap = 'round';
+      ctx.shadowColor = pTheme.glow;
+      ctx.shadowBlur = isLast ? 14 : 7;
+
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+
+      if (isLast) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(1.5, lineWidth * 0.25);
+        ctx.globalAlpha = 0.75;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function animationLoop() {
+      renderCanvas();
+      requestAnimationFrame(animationLoop);
+    }
+
+    // =========================================================================
+    // 9. POINTER / TOUCH INTERACTION HANDLERS
+    // =========================================================================
+    function getCanvasCoords(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: clientX - rect.left,
+        y: clientY - rect.top
+      };
+    }
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (state.isTouchGesture) return;
+      const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+      state.hoverEdge = findNearestAvailableEdge(x, y);
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      state.hoverEdge = null;
+      state.dragStartDot = null;
+    });
+
+    canvas.addEventListener('click', (e) => {
+      if (state.isTouchGesture) {
+        state.isTouchGesture = false;
+        return;
+      }
+      SoundFX.init();
+      const { x, y } = getCanvasCoords(e.clientX, e.clientY);
+      const edge = findNearestAvailableEdge(x, y);
+      if (edge) {
+        attemptMove(edge.type, edge.r, edge.c);
+        state.hoverEdge = null;
+      }
+    });
+
+    canvas.addEventListener(
+      'touchstart',
+      (e) => {
+        if (e.touches.length > 0) {
+          e.preventDefault();
+          state.isTouchGesture = true;
+          SoundFX.init();
+          const touch = e.touches[0];
+          const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
+          state.dragStartDot = findNearestDot(x, y);
+          state.hoverEdge = findNearestAvailableEdge(x, y);
+        }
+      },
+      { passive: false }
+    );
+
+    canvas.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.touches.length > 0) {
+          e.preventDefault();
+          const touch = e.touches[0];
+          const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
+          const dragEdge = findEdgeFromDrag(state.dragStartDot, x, y);
+          state.hoverEdge = dragEdge || findNearestAvailableEdge(x, y);
+        }
+      },
+      { passive: false }
+    );
+
+    canvas.addEventListener(
+      'touchend',
+      (e) => {
+        e.preventDefault();
+        const touch = e.changedTouches && e.changedTouches[0];
+        let chosenEdge = state.hoverEdge;
+        if (touch) {
+          const { x, y } = getCanvasCoords(touch.clientX, touch.clientY);
+          chosenEdge = findEdgeFromDrag(state.dragStartDot, x, y) || findNearestAvailableEdge(x, y);
+        }
+        if (chosenEdge) {
+          attemptMove(chosenEdge.type, chosenEdge.r, chosenEdge.c);
+        }
+        state.hoverEdge = null;
+        state.dragStartDot = null;
+        setTimeout(() => {
+          state.isTouchGesture = false;
+        }, 350);
+      },
+      { passive: false }
+    );
+
+    canvas.addEventListener('touchcancel', () => {
+      state.hoverEdge = null;
+      state.dragStartDot = null;
+      state.isTouchGesture = false;
+    });
+
+    // =========================================================================
+    // 10. HUD & UI STATE SYNCHRONIZATION
+    // =========================================================================
+    function updateHUD() {
+      const theme = COLOR_THEMES[state.themeId] || COLOR_THEMES['cyan-rose'];
+      const totalBoxes = (state.rows - 1) * (state.cols - 1);
+      const remaining = Math.max(0, totalBoxes - (state.p1Score + state.p2Score));
+
+      document.getElementById('labelP1Name').textContent = state.p1Name;
+      document.getElementById('labelP2Name').textContent = state.p2Name;
+      document.getElementById('scoreP1').textContent = state.p1Score;
+      document.getElementById('scoreP2').textContent = state.p2Score;
+      document.getElementById('boxesRemaining').textContent = remaining;
+      document.getElementById('gridBadge').textContent = `${state.rows}×${state.cols}`;
+
+      const dotP1 = document.getElementById('dotP1');
+      const dotP2 = document.getElementById('dotP2');
+      dotP1.style.backgroundColor = theme.p1.dotBg;
+      dotP2.style.backgroundColor = theme.p2.dotBg;
+
+      const badgeYouP1 = document.getElementById('badgeYouP1');
+      const badgeYouP2 = document.getElementById('badgeYouP2');
+      if (state.mode === 'online') {
+        badgeYouP1.classList.toggle('hidden', state.myPlayerNum !== 1);
+        badgeYouP2.classList.toggle('hidden', state.myPlayerNum !== 2);
+      } else {
+        badgeYouP1.classList.add('hidden');
+        badgeYouP2.classList.add('hidden');
+      }
+
+      const cardP1 = document.getElementById('cardP1');
+      const cardP2 = document.getElementById('cardP2');
+      const glowP1 = document.getElementById('glowP1');
+      const glowP2 = document.getElementById('glowP2');
+      const turnTagP1 = document.getElementById('turnTagP1');
+      const turnTagP2 = document.getElementById('turnTagP2');
+
+      glowP1.style.background = `linear-gradient(135deg, ${theme.p1.gradStart}, transparent)`;
+      glowP2.style.background = `linear-gradient(135deg, ${theme.p2.gradStart}, transparent)`;
+
+      if (state.currentTurn === 1 && !state.gameOver) {
+        cardP1.style.borderColor = theme.p1.primary;
+        cardP2.style.borderColor = 'rgba(148, 163, 184, 0.14)';
+        glowP1.style.opacity = '0.35';
+        glowP2.style.opacity = '0';
+        turnTagP1.textContent = state.mode === 'online' && state.myPlayerNum === 1 ? 'Your Turn' : 'Active Turn';
+        turnTagP1.className = `text-[11px] font-bold mt-0.5 ${theme.p1.textClass}`;
+        turnTagP2.textContent = 'Waiting';
+        turnTagP2.className = 'text-[11px] font-medium mt-0.5 text-slate-500';
+      } else if (state.currentTurn === 2 && !state.gameOver) {
+        cardP2.style.borderColor = theme.p2.primary;
+        cardP1.style.borderColor = 'rgba(148, 163, 184, 0.14)';
+        glowP2.style.opacity = '0.35';
+        glowP1.style.opacity = '0';
+        turnTagP2.textContent =
+          state.mode === 'bot'
+            ? 'Bot Thinking...'
+            : state.mode === 'online' && state.myPlayerNum === 2
+              ? 'Your Turn'
+              : 'Active Turn';
+        turnTagP2.className = `text-[11px] font-bold mt-0.5 ${theme.p2.textClass}`;
+        turnTagP1.textContent = 'Waiting';
+        turnTagP1.className = 'text-[11px] font-medium mt-0.5 text-slate-500';
+      } else {
+        cardP1.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+        cardP2.style.borderColor = 'rgba(148, 163, 184, 0.2)';
+        glowP1.style.opacity = '0.15';
+        glowP2.style.opacity = '0.15';
+        turnTagP1.textContent = 'Match Complete';
+        turnTagP2.textContent = 'Match Complete';
+      }
+
+      const modeBadge = document.getElementById('modeIndicatorBadge');
+      if (state.mode === 'local') modeBadge.textContent = 'Mode: Local 1v1 (Pass & Play)';
+      else if (state.mode === 'bot') modeBadge.textContent = 'Mode: 1v1 vs Tactical Bot';
+      else modeBadge.textContent = `Mode: Online 1v1 (Room ${state.roomId || ''})`;
+
+      const waitingOverlay = document.getElementById('waitingOverlay');
+      const onlineStatusDot = document.getElementById('onlineStatusDot');
+      const onlineStatusText = document.getElementById('onlineStatusText');
+
+      if (state.mode === 'online') {
+        if (!state.opponentConnected) {
+          waitingOverlay.classList.remove('hidden');
+          onlineStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+          onlineStatusText.textContent = 'Waiting for 2nd player to join...';
+        } else {
+          waitingOverlay.classList.add('hidden');
+          onlineStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+          onlineStatusText.textContent = `1v1 Connected: ${state.p1Name} vs ${state.p2Name}`;
+        }
+      } else {
+        waitingOverlay.classList.add('hidden');
+      }
+
+      const gameOverOverlay = document.getElementById('gameOverOverlay');
+      if (state.gameOver) {
+        gameOverOverlay.classList.remove('hidden');
+        gameOverOverlay.classList.add('shown-win');
+
+        const winnerTitle = document.getElementById('winnerTitle');
+        const winnerSubtitle = document.getElementById('winnerSubtitle');
+        document.getElementById('finalNameP1').textContent = state.p1Name;
+        document.getElementById('finalNameP2').textContent = state.p2Name;
+        document.getElementById('finalScoreP1').textContent = state.p1Score;
+        document.getElementById('finalScoreP2').textContent = state.p2Score;
+
+        if (state.winner === 1) {
+          winnerTitle.textContent = `${state.p1Name} Wins!`;
+          winnerSubtitle.textContent = `Captured ${state.p1Score} of ${totalBoxes} gradient squares!`;
+        } else if (state.winner === 2) {
+          winnerTitle.textContent = `${state.p2Name} Wins!`;
+          winnerSubtitle.textContent = `Captured ${state.p2Score} of ${totalBoxes} gradient squares!`;
+        } else {
+          winnerTitle.textContent = "It's a Draw!";
+          winnerSubtitle.textContent = `Both players claimed ${state.p1Score} boxes each!`;
+        }
+      } else {
+        gameOverOverlay.classList.add('hidden');
+        gameOverOverlay.classList.remove('shown-win');
+      }
+    }
+
+    // =========================================================================
+    // 11. SETUP MODAL & BUTTON EVENT LISTENERS
+    // =========================================================================
+    function refreshSetupUI() {
+      document.querySelectorAll('.mode-btn').forEach((btn) => {
+        const isSelected = btn.dataset.mode === state.selectedMode;
+        btn.className = isSelected
+          ? 'mode-btn p-2.5 sm:p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-cyan-500/15 border-cyan-400 text-white'
+          : 'mode-btn p-2.5 sm:p-3 rounded-2xl border text-left transition flex flex-col justify-between bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500';
+      });
+
+      document.querySelectorAll('.dots-btn').forEach((btn) => {
+        const r = Number(btn.dataset.rows);
+        const c = Number(btn.dataset.cols);
+        const isSelected = r === state.selectedRows && c === state.selectedCols;
+        btn.className = isSelected
+          ? 'dots-btn py-2 px-1 rounded-xl border text-center transition bg-cyan-500/15 border-cyan-400 text-white'
+          : 'dots-btn py-2 px-1 rounded-xl border text-center transition bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500';
+      });
+
+      const customRowsEl = document.getElementById('customRowsVal');
+      const customColsEl = document.getElementById('customColsVal');
+      if (customRowsEl) customRowsEl.textContent = state.selectedRows;
+      if (customColsEl) customColsEl.textContent = state.selectedCols;
+
+      const totalBoxes = (state.selectedRows - 1) * (state.selectedCols - 1);
+      document.getElementById('selectedGridDesc').textContent = `${state.selectedRows}×${state.selectedCols} Dots (${totalBoxes} Boxes)`;
+
+      document.querySelectorAll('.theme-btn').forEach((btn) => {
+        const isSelected = btn.dataset.theme === state.selectedTheme;
+        btn.className = isSelected
+          ? 'theme-btn p-2.5 rounded-2xl border transition flex items-center justify-between bg-cyan-500/15 border-cyan-400 text-white'
+          : 'theme-btn p-2.5 rounded-2xl border transition flex items-center justify-between bg-slate-900/80 border-slate-700/80 text-slate-300 hover:border-slate-500';
+      });
+
+      const localNames = document.getElementById('localNamesSection');
+      const p2Wrapper = document.getElementById('p2NameFieldWrapper');
+      const offlineStart = document.getElementById('offlineStartSection');
+      const onlineLobby = document.getElementById('onlineLobbySection');
+
+      if (state.selectedMode === 'online') {
+        localNames.classList.add('hidden');
+        offlineStart.classList.add('hidden');
+        onlineLobby.classList.remove('hidden');
+      } else {
+        localNames.classList.remove('hidden');
+        offlineStart.classList.remove('hidden');
+        onlineLobby.classList.add('hidden');
+        if (state.selectedMode === 'bot') {
+          p2Wrapper.classList.add('opacity-50', 'pointer-events-none');
+        } else {
+          p2Wrapper.classList.remove('opacity-50', 'pointer-events-none');
+        }
+      }
+    }
+
+    document.querySelectorAll('.mode-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.selectedMode = btn.dataset.mode;
+        refreshSetupUI();
+      });
+    });
+
+    document.querySelectorAll('.dots-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.selectedRows = Number(btn.dataset.rows);
+        state.selectedCols = Number(btn.dataset.cols);
+        refreshSetupUI();
+      });
+    });
+
+    document.getElementById('btnRowsDec').addEventListener('click', () => {
+      state.selectedRows = Math.max(3, state.selectedRows - 1);
+      refreshSetupUI();
+    });
+    document.getElementById('btnRowsInc').addEventListener('click', () => {
+      state.selectedRows = Math.min(15, state.selectedRows + 1);
+      refreshSetupUI();
+    });
+    document.getElementById('btnColsDec').addEventListener('click', () => {
+      state.selectedCols = Math.max(3, state.selectedCols - 1);
+      refreshSetupUI();
+    });
+    document.getElementById('btnColsInc').addEventListener('click', () => {
+      state.selectedCols = Math.min(15, state.selectedCols + 1);
+      refreshSetupUI();
+    });
+
+    document.querySelectorAll('.theme-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.selectedTheme = btn.dataset.theme;
+        refreshSetupUI();
+      });
+    });
+
+    document.getElementById('btnStartOfflineGame').addEventListener('click', () => {
+      SoundFX.init();
+      startOfflineMatch();
+    });
+
+    document.getElementById('btnOpenLobby').addEventListener('click', () => {
+      document.getElementById('setupModal').classList.remove('hidden');
+      refreshSetupUI();
+    });
+
+    document.getElementById('btnCloseSetup').addEventListener('click', () => {
+      document.getElementById('setupModal').classList.add('hidden');
+      requestAnimationFrame(() => resizeCanvas());
+    });
+
+    // Sound toggle button
+    document.getElementById('btnToggleSound').addEventListener('click', () => {
+      SoundFX.enabled = !SoundFX.enabled;
+      document.getElementById('iconSoundOn').classList.toggle('hidden', !SoundFX.enabled);
+      document.getElementById('iconSoundOff').classList.toggle('hidden', SoundFX.enabled);
+      if (SoundFX.enabled) {
+        SoundFX.init();
+        showToast('Sound effects enabled', 'info');
+      } else {
+        showToast('Sound effects muted', 'info');
+      }
+    });
+
+    // Rules modal controls
+    document.getElementById('btnRules').addEventListener('click', () => {
+      document.getElementById('rulesModal').classList.remove('hidden');
+    });
+    document.getElementById('btnCloseRules').addEventListener('click', () => {
+      document.getElementById('rulesModal').classList.add('hidden');
+    });
+    document.getElementById('btnGotItRules').addEventListener('click', () => {
+      document.getElementById('rulesModal').classList.add('hidden');
+    });
+
+    // Reset board confirmation modal controls
+    document.getElementById('btnResetBoard').addEventListener('click', () => {
+      document.getElementById('confirmResetModal').classList.remove('hidden');
+    });
+    document.getElementById('btnCancelReset').addEventListener('click', () => {
+      document.getElementById('confirmResetModal').classList.add('hidden');
+    });
+    document.getElementById('btnConfirmReset').addEventListener('click', () => {
+      document.getElementById('confirmResetModal').classList.add('hidden');
+      resetMatchBoard();
+      showToast('Match board reset!', 'info');
+    });
+
+    // Game Over overlay buttons
+    document.getElementById('btnPlayAgain').addEventListener('click', () => {
+      resetMatchBoard();
+    });
+    document.getElementById('btnChangeSettingsEnd').addEventListener('click', () => {
+      document.getElementById('gameOverOverlay').classList.add('hidden');
+      document.getElementById('setupModal').classList.remove('hidden');
+      refreshSetupUI();
+    });
+
+    // Online Multiplayer buttons
+    document.getElementById('btnCreateOnlineRoom').addEventListener('click', () => {
+      SoundFX.init();
+      createOnlineRoom();
+    });
+
+    document.getElementById('btnJoinOnlineRoom').addEventListener('click', () => {
+      SoundFX.init();
+      const code = document.getElementById('inputJoinRoomCode').value;
+      joinOnlineRoom(code);
+    });
+
+    document.getElementById('inputJoinRoomCode').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        SoundFX.init();
+        joinOnlineRoom(e.target.value);
+      }
+    });
+
+    document.getElementById('btnCopyRoomCode').addEventListener('click', () => {
+      if (state.roomId) copyTextFallback(state.roomId, `Room Code ${state.roomId} copied!`);
+    });
+
+    document.getElementById('btnOverlayCopy').addEventListener('click', () => {
+      if (state.roomId) copyTextFallback(state.roomId, `Room Code ${state.roomId} copied!`);
+    });
+
+    const overlayCopyLinkBtn = document.getElementById('btnOverlayCopyLink');
+    if (overlayCopyLinkBtn) {
+      overlayCopyLinkBtn.addEventListener('click', () => {
+        if (state.roomId) {
+          const inviteUrl = getShareableRoomUrl(state.roomId);
+          copyTextFallback(inviteUrl, 'Invite link copied! Share with your opponent.');
+        }
+      });
+    }
+
+    document.getElementById('btnCopyUserId').addEventListener('click', () => {
+      if (currentUser && currentUser.uid) {
+        copyTextFallback(currentUser.uid, 'User ID copied to clipboard!');
+      }
+    });
+
+    document.getElementById('btnCancelOnlineRoom').addEventListener('click', () => {
+      leaveOnlineRoom(false);
+    });
+
+    // =========================================================================
+    // 12. INITIALIZATION ON WINDOW LOAD
+    // =========================================================================
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => {
+      setTimeout(resizeCanvas, 120);
+    });
+
+    if (typeof ResizeObserver !== 'undefined') {
+      const boardEl = document.getElementById('boardContainer');
+      if (boardEl) {
+        const ro = new ResizeObserver(() => resizeCanvas());
+        ro.observe(boardEl);
+      }
+    }
+
+    window.addEventListener('load', () => {
+      refreshSetupUI();
+      resizeCanvas();
+      updateHUD();
+      initFirebase();
+      requestAnimationFrame(animationLoop);
+
+      // Auto-populate Online 1v1 Room Code if opened via ?room=XXXXXX invite link
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const inviteRoom = params.get('room');
+        if (inviteRoom && inviteRoom.trim().length >= 4) {
+          state.selectedMode = 'online';
+          refreshSetupUI();
+          const joinInput = document.getElementById('inputJoinRoomCode');
+          if (joinInput) joinInput.value = inviteRoom.trim().toUpperCase();
+          showToast(`Invite detected for Room ${inviteRoom.trim().toUpperCase()} — tap Join!`, 'info');
+        }
+      } catch (err) {
+        // Ignore URL parsing issues
+      }
+    });
+  </script>
+</body>
+</html>
